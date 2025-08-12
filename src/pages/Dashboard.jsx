@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import useAppStore, { levelFromXp, nextLevelXp, LEVEL_THRESHOLDS } from '../state/useAppStore.js'
+import useAppStore, { nextLevelXp } from '../state/useAppStore.js'
 
 const RANK_TITLES = [
   'Newcomer','Apprentice','Junior Tinkerer','Prompt Explorer',
@@ -10,7 +10,7 @@ const RANK_TITLES = [
 
 export default function Dashboard() {
   const roadmap = useAppStore(s => s.roadmap)
-  const xp = useAppStore(s => s.xp) // <- subscribe to a primitive
+  const xp = useAppStore(s => s.xp)
 
   const info = useMemo(() => {
     const { currentLevel, cur, next } = nextLevelXp(xp)
@@ -25,7 +25,9 @@ export default function Dashboard() {
   return (
     <div className="stack">
       <h1>Welcome 👋</h1>
-      <p className="muted">Rank: <strong>{info.title}</strong> • Level {info.level} • {info.xp} XP</p>
+      <p className="muted">
+        Rank: <strong>{info.title}</strong> • Level {info.level} • {info.xp} XP
+      </p>
 
       <div className="card">
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
@@ -37,20 +39,29 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid">
+      {/* 3-up horizontal cards */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 12
+        }}
+      >
         <div className="card">
-          <h3>Today</h3>
-          <p>Complete a task to earn XP and keep your streak alive.</p>
+          <h3 style={{marginTop:0}}>Today</h3>
+          <p className="muted">Complete a task to earn XP and keep your streak alive.</p>
           <Link to="/tasks" className="btn">Go to Tasks</Link>
         </div>
+
         <div className="card">
-          <h3>Roadmap</h3>
-          <p>{done} / {roadmap.length} topics completed.</p>
+          <h3 style={{marginTop:0}}>Roadmap</h3>
+          <p className="muted">{done} / {roadmap.length} topics completed.</p>
           <Link to="/roadmap" className="btn">Open Roadmap</Link>
         </div>
+
         <div className="card">
-          <h3>Achievements</h3>
-          <p>Earn badges by leveling up and keeping streaks.</p>
+          <h3 style={{marginTop:0}}>Achievements</h3>
+          <p className="muted">Earn badges by leveling up and keeping streaks.</p>
           <Link to="/achievements" className="btn">View Achievements</Link>
         </div>
       </div>

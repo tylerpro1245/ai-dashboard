@@ -2,7 +2,7 @@ import React from 'react'
 import useAppStore from '../state/useAppStore.js'
 
 export default function Header() {
-  const theme = useAppStore(s => s.theme)
+  const theme = useAppStore(s => s.theme || 'dark')
   const toggleTheme = useAppStore(s => s.toggleTheme)
   const syncStatus = useAppStore(s => s.syncStatus)
   const autoSync = useAppStore(s => s.autoSync)

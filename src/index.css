@@ -81,3 +81,41 @@ a:hover { text-decoration: underline; }
 .dot.done { background:#22c55e; }
 .dot.prog { background:#f59e0b; }
 .dot.nots { background:#64748b; }
+/* 3-up responsive grid for dashboard */
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 980px) {
+  .grid3 { grid-template-columns: 1fr; }
+}
+
+/* Nice select styling */
+.select {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* Modal basics */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  width: min(720px, 92vw);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* Small status pill */
+.pill {
+  display:inline-block; padding:4px 8px; border-radius:999px;
+  background:#0b1220; color:#e5e7eb; font-size:12px; border:1px solid var(--border);
+}
