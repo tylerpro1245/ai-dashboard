@@ -2,15 +2,48 @@
 
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use tauri::AppHandle; // no need for Builder/Manager here
-use tauri::Manager;
-use tauri_plugin_log::{Builder as LogBuilder, Target, TargetKind};
+use tauri::{AppHandle, Manager};
+use tauri_plugin_log::Builder as LogBuilder;
+use tauri::menu::{Menu, MenuItem, Submenu};
 
-// ---- Helpers to store/read the API key in the app's config dir ----
+// ---------- file storage for API key ----------
 fn key_path(app: &AppHandle) -> PathBuf {
   let dir = app.path().app_config_dir().expect("config dir");
-  fs::create_dir_all(&dir).ok();
+  let _ = fs::create_dir_all(&dir);
   dir.join("openai_key.txt")
+}
+
+#[tauri::command]
+fn save_api_key(app: AppHandle, key: String) -> Result<(), String> {
+  let p = key_path(&app);
+  fs::write(p, key).map_err(|e| e.to_string())
+}
+
+fn read_api_key(app: &AppHandle) -> Option<String> {
+  let p = key_path(app);
+  fs::read_to_string(p).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+// ---------- challenge spec ----------
+#[derive(Deserialize)]
+struct SpecReq {
+  title: String,
+  tasks: Vec<String>,
+  level: Option<String>,
+  model: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Rubric {
+  min_sentences: Option<u32>,
+  require_example: Option<bool>,
+  key_points: Option<Vec<String>>,
+}
+
+#[derive(Serialize)]
+struct SpecRes {
+  requirements: Vec<String>,
+  rubric: Rubric,
 }
 
 #[tauri::command]
@@ -23,20 +56,15 @@ async fn generate_challenge_spec(app: AppHandle, payload: SpecReq) -> Result<Spe
 Return ONLY JSON like:
 {
   "requirements": ["...","...","..."],
-  "rubric": {
-    "min_sentences": number,
-    "require_example": true|false,
-    "key_points": ["...", "..."]
-  }
+  "rubric": { "min_sentences": number, "require_example": true|false, "key_points": ["...", "..."] }
 }
-Keep requirements 3-6 bullet points, concrete, and directly tied to the provided tasks."#;
+Keep requirements 3-6 bullet points, concrete, and tied to the provided tasks."#;
 
   let user = serde_json::json!({
     "title": payload.title,
     "level": level,
     "tasks": payload.tasks
-  })
-  .to_string();
+  }).to_string();
 
   let body = serde_json::json!({
     "model": model,
@@ -63,125 +91,32 @@ Keep requirements 3-6 bullet points, concrete, and directly tied to the provided
     return Err(format!("OpenAI error: {} {}", status, t));
   }
 
-  #[derive(Deserialize)]
-  struct ChatChoiceMsg {
-    content: Option<String>
-  }
-  #[derive(Deserialize)]
-  struct ChatChoice {
-    message: ChatChoiceMsg
-  }
-  #[derive(Deserialize)]
-  struct ChatResp {
-    choices: Vec<ChatChoice>
-  }
+  #[derive(Deserialize)] struct ChatChoiceMsg { content: Option<String> }
+  #[derive(Deserialize)] struct ChatChoice { message: ChatChoiceMsg }
+  #[derive(Deserialize)] struct ChatResp { choices: Vec<ChatChoice> }
 
   let data: ChatResp = resp.json().await.map_err(|e| e.to_string())?;
-  let content = data
-    .choices
-    .get(0)
-    .and_then(|c| c.message.content.as_ref())
-    .cloned()
+  let content = data.choices.get(0).and_then(|c| c.message.content.as_ref()).cloned()
     .ok_or("No content")?;
 
   let v: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-  let requirements = v
-    .get("requirements")
+  let requirements = v.get("requirements")
     .and_then(|r| r.as_array())
-    .map(|arr| {
-      arr.iter()
-        .filter_map(|x| x.as_str().map(|s| s.to_string()))
-        .collect()
-    })
-    .unwrap_or_else(|| {
-      vec![
-        "Explain the concept clearly.".into(),
-        "Provide a concrete example.".into(),
-      ]
-    });
-
+    .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+    .unwrap_or_else(|| vec!["Explain the concept clearly.".into(), "Provide a concrete example.".into()]);
   let rubric = Rubric {
-    min_sentences: v
-      .get("rubric")
-      .and_then(|r| r.get("min_sentences"))
-      .and_then(|x| x.as_u64())
-      .map(|n| n as u32),
-    require_example: v
-      .get("rubric")
-      .and_then(|r| r.get("require_example"))
-      .and_then(|x| x.as_bool()),
-    key_points: v
-      .get("rubric")
-      .and_then(|r| r.get("key_points"))
-      .and_then(|x| x.as_array())
-      .map(|arr| {
-        arr.iter()
-          .filter_map(|x| x.as_str().map(|s| s.to_string()))
-          .collect()
-      }),
+    min_sentences: v.get("rubric").and_then(|r| r.get("min_sentences")).and_then(|x| x.as_u64()).map(|n| n as u32),
+    require_example: v.get("rubric").and_then(|r| r.get("require_example")).and_then(|x| x.as_bool()),
+    key_points: v.get("rubric").and_then(|r| r.get("key_points")).and_then(|x| x.as_array()).map(|arr|
+      arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()
+    ),
   };
 
   Ok(SpecRes { requirements, rubric })
 }
 
-#[tauri::command]
-fn save_api_key(app: AppHandle, key: String) -> Result<(), String> {
-  let p = key_path(&app);
-  fs::write(p, key).map_err(|e| e.to_string())
-}
-
-fn read_api_key(app: &AppHandle) -> Option<String> {
-  let p = key_path(app);
-  fs::read_to_string(p)
-    .ok()
-    .map(|s| s.trim().to_string())
-    .filter(|s| !s.is_empty())
-}
-
-// ---- Simple existing commands you had ----
-#[tauri::command]
-fn ping() -> &'static str {
-  "pong"
-}
-
-#[tauri::command]
-async fn generate_challenge(level: String, topic: String) -> Result<String, String> {
-  let s = format!(
-    "Daily Micro-Challenges for level={} topic={}:\
-     \n1) Explain the core concept in 3–6 sentences.\
-     \n2) Write a 10–20 line code snippet demonstrating it.\
-     \n3) Create a test prompt to validate understanding.",
-    level, topic
-  );
-  Ok(s)
-}
-
-#[tauri::command]
-async fn mark_node_in_progress(id: String) -> Result<String, String> {
-  Ok(format!("marked {} in progress (placeholder)", id))
-}
-
-// ---- AI challenge evaluation ----
-#[derive(Deserialize)]
-struct SpecReq {
-  title: String,
-  tasks: Vec<String>,
-  level: Option<String>,
-  model: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct Rubric {
-  min_sentences: Option<u32>,
-  require_example: Option<bool>,
-  key_points: Option<Vec<String>>,
-}
-
-#[derive(Serialize)]
-struct SpecRes {
-  requirements: Vec<String>,
-  rubric: Rubric,
-}
+// ---------- other commands ----------
+#[tauri::command] fn ping() -> &'static str { "pong" }
 
 #[derive(Deserialize)]
 struct ChallengeReq {
@@ -191,12 +126,8 @@ struct ChallengeReq {
   model: Option<String>,
   rubric: Option<Rubric>,
 }
-
 #[derive(Serialize)]
-struct ChallengeRes {
-  passed: bool,
-  feedback: String,
-}
+struct ChallengeRes { passed: bool, feedback: String }
 
 #[tauri::command]
 async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<ChallengeRes, String> {
@@ -223,10 +154,7 @@ async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<Chall
 
   let user = format!(
     "Evaluate the answer for node '{}' ({}).\nRubric:\n{}\n\nAnswer:\n{}",
-    payload.node_id,
-    payload.title,
-    rubric_lines.join("\n"),
-    payload.answer
+    payload.node_id, payload.title, rubric_lines.join("\n"), payload.answer
   );
 
   let body = serde_json::json!({
@@ -254,50 +182,48 @@ async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<Chall
     return Err(format!("OpenAI error: {} {}", status, t));
   }
 
-  #[derive(Deserialize)]
-  struct ChatChoiceMsg {
-    content: Option<String>
-  }
-  #[derive(Deserialize)]
-  struct ChatChoice {
-    message: ChatChoiceMsg
-  }
-  #[derive(Deserialize)]
-  struct ChatResp {
-    choices: Vec<ChatChoice>
-  }
+  #[derive(Deserialize)] struct ChatChoiceMsg { content: Option<String> }
+  #[derive(Deserialize)] struct ChatChoice { message: ChatChoiceMsg }
+  #[derive(Deserialize)] struct ChatResp { choices: Vec<ChatChoice> }
 
   let data: ChatResp = resp.json().await.map_err(|e| e.to_string())?;
-  let content = data
-    .choices
-    .get(0)
-    .and_then(|c| c.message.content.as_ref())
-    .cloned()
+  let content = data.choices.get(0).and_then(|c| c.message.content.as_ref()).cloned()
     .ok_or_else(|| "No content".to_string())?;
 
   let parsed: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
   let passed = parsed.get("passed").and_then(|v| v.as_bool()).unwrap_or(false);
-  let feedback = parsed
-    .get("feedback")
-    .and_then(|v| v.as_str())
-    .unwrap_or("No feedback")
-    .to_string();
+  let feedback = parsed.get("feedback").and_then(|v| v.as_str()).unwrap_or("No feedback").to_string();
 
   Ok(ChallengeRes { passed, feedback })
 }
 
-// ---- Single, correct main() ----
+// ---------- app entry ----------
 fn main() {
+  // Menu with a DevTools toggle
+  let dev_menu = Submenu::new(
+    "Debug",
+    Menu::with_items([
+      &MenuItem::with_id("toggle-devtools", "Toggle DevTools", true, None::<&str>).unwrap(),
+    ])
+  );
+
   tauri::Builder::default()
-    .plugin(
-      LogBuilder::default()
-        .level(log::LevelFilter::Debug)
-        .targets([
-          Target::new(TargetKind::LogDir { file_name: None }),
-          Target::new(TargetKind::Stdout),
-        ])
-        .build()
-    )
+    .plugin(LogBuilder::default().build()) // simple defaults; writes to log dir
+    .menu(Menu::with_items([&dev_menu]))
+    .on_menu_event(|app, event| {
+      if event.id() == "toggle-devtools" {
+        if let Some(win) = app.get_webview_window("main") {
+          win.toggle_devtools();
+        }
+      }
+    })
+    .setup(|app| {
+      // Auto-open DevTools at startup so we can see errors in the packaged app
+      if let Some(win) = app.get_webview_window("main") {
+        win.open_devtools();
+      }
+      Ok(())
+    })
     .invoke_handler(tauri::generate_handler![
       save_api_key,
       ping,
