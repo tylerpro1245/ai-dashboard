@@ -1,0 +1,56 @@
+name: Build Tauri (Windows + macOS)
+
+on:
+  workflow_dispatch:     # run manually from the Actions tab
+  push:
+    tags:
+      - "v*"            # run when you push a tag like v0.1.0
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    env:
+      CI: "true"
+      # If your app needs these at build-time, add them as GitHub repo secrets first.
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo + npm
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            node_modules
+          key: ${{ runner.os }}-cargo-npm-${{ hashFiles('**/Cargo.lock', '**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npm run tauri:build
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-bundles-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/**
