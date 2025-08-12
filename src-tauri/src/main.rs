@@ -264,3 +264,18 @@ fn main() {
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
+fn main() {
+  tauri::Builder::default()
+    .plugin(
+      tauri_plugin_log::Builder::default()
+        .level(log::LevelFilter::Debug)                 // log a lot
+        .targets([                                      // write to file + stdout
+          tauri_plugin_log::Target::LogDir,
+          tauri_plugin_log::Target::Stdout,
+        ])
+        .build()
+    )
+    // .plugin(... your other plugins ...)
+    .run(tauri::generate_context!())
+    .expect("error while running tauri application");
+}
