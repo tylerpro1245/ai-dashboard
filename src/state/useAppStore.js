@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { invoke } from '@tauri-apps/api/core'
-import { supabase } from '../lib/supabase'  // <-- NEW
+import { supabase, enabled as supaEnabled } from '../lib/supabase'
 
 // slug
 function slugify(s) {
@@ -346,28 +346,32 @@ resetEverywhere: async () => {
 
       // ----- AUTH -----
       getUser: async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        return user || null
-      },
-      signUp: async (email, password) => {
-        const { data, error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-        return data.user
-      },
-      signIn: async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-        return data.user
-      },
-      signOut: async () => {
-        const { error } = await supabase.auth.signOut()
-        if (error) throw error
-      },
+  if (!supaEnabled || !supabase) return null
+  const { data: { user } } = await supabase.auth.getUser()
+  return user || null
+},
+signUp: async (email, password) => {
+  if (!supaEnabled || !supabase) throw new Error('Cloud sync is disabled (Supabase not configured).')
+  const { data, error } = await supabase.auth.signUp({ email, password })
+  if (error) throw error
+  return data.user
+},
+signIn: async (email, password) => {
+  if (!supaEnabled || !supabase) throw new Error('Cloud sync is disabled (Supabase not configured).')
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) throw error
+  return data.user
+},
+signOut: async () => {
+  if (!supaEnabled || !supabase) return
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
+},
 
       // ----- SYNC PUSH / PULL -----
       syncPush: async () => {
         const user = await get().getUser()
-        if (!user) throw new Error('Not signed in')
+        if (!supaEnabled || !supabase) return { disabled: true }
         const doc = get().exportState()
 
         get().setSyncStatus('pushing') // NEW
@@ -397,7 +401,7 @@ resetEverywhere: async () => {
 
       syncPull: async () => {
         const user = await get().getUser()
-        if (!user) throw new Error('Not signed in')
+        if (!supaEnabled || !supabase) return { disabled: true }
 
         get().setSyncStatus('pulling') // NEW
         const { data, error } = await supabase

@@ -1,5 +1,5 @@
 // src/App.jsx
-import { supabase } from './lib/supabase.js'
+import { enabled as supaEnabled } from './lib/supabase.js'
 import React, { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar.jsx'
@@ -42,6 +42,10 @@ export default function App() {
         if (mounted && u && autoSync) {
           await syncPull()
         }
+        if (!supaEnabled) {
+  setSyncStatus && setSyncStatus('disabled') // optional UI hint
+  return // don’t call syncPull/syncPush
+}
       } catch {}
     })()
 
