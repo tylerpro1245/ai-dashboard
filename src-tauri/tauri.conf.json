@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.tylerpro1245.aidashboard",
   "build": {
-    "frontendDist": "../build",
+    "frontendDist": "../dist",               
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
@@ -19,9 +19,7 @@
         "fullscreen": false
       }
     ],
-    "security": {
-      "csp": null
-    }
+    "security": { "csp": null }
   },
   "bundle": {
     "active": true,
