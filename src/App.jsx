@@ -1,3 +1,4 @@
+import { supabase } from './lib/supabase.js'
 import React, { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar.jsx'
