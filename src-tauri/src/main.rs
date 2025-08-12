@@ -2,7 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use tauri::{AppHandle, Builder, Manager};
+use tauri::AppHandle; // no need for Builder/Manager here
+use tauri_plugin_log::{Builder as LogBuilder, LogTarget};
 
 // ---- Helpers to store/read the API key in the app's config dir ----
 fn key_path(app: &AppHandle) -> PathBuf {
@@ -10,6 +11,7 @@ fn key_path(app: &AppHandle) -> PathBuf {
   fs::create_dir_all(&dir).ok();
   dir.join("openai_key.txt")
 }
+
 #[tauri::command]
 async fn generate_challenge_spec(app: AppHandle, payload: SpecReq) -> Result<SpecRes, String> {
   let key = read_api_key(&app).ok_or("OpenAI API key not set in Settings")?;
@@ -32,7 +34,8 @@ Keep requirements 3-6 bullet points, concrete, and directly tied to the provided
     "title": payload.title,
     "level": level,
     "tasks": payload.tasks
-  }).to_string();
+  })
+  .to_string();
 
   let body = serde_json::json!({
     "model": model,
@@ -60,28 +63,61 @@ Keep requirements 3-6 bullet points, concrete, and directly tied to the provided
   }
 
   #[derive(Deserialize)]
-  struct ChatChoiceMsg { content: Option<String> }
+  struct ChatChoiceMsg {
+    content: Option<String>
+  }
   #[derive(Deserialize)]
-  struct ChatChoice { message: ChatChoiceMsg }
+  struct ChatChoice {
+    message: ChatChoiceMsg
+  }
   #[derive(Deserialize)]
-  struct ChatResp { choices: Vec<ChatChoice> }
+  struct ChatResp {
+    choices: Vec<ChatChoice>
+  }
 
   let data: ChatResp = resp.json().await.map_err(|e| e.to_string())?;
-  let content = data.choices.get(0).and_then(|c| c.message.content.as_ref()).cloned()
+  let content = data
+    .choices
+    .get(0)
+    .and_then(|c| c.message.content.as_ref())
+    .cloned()
     .ok_or("No content")?;
 
   let v: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-  // Build safe defaults
-  let requirements = v.get("requirements")
+  let requirements = v
+    .get("requirements")
     .and_then(|r| r.as_array())
-    .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
-    .unwrap_or_else(|| vec!["Explain the concept clearly.".into(), "Provide a concrete example.".into()]);
-  let rubric = Rubric{
-    min_sentences: v.get("rubric").and_then(|r| r.get("min_sentences")).and_then(|x| x.as_u64()).map(|n| n as u32),
-    require_example: v.get("rubric").and_then(|r| r.get("require_example")).and_then(|x| x.as_bool()),
-    key_points: v.get("rubric").and_then(|r| r.get("key_points")).and_then(|x| x.as_array()).map(|arr|
-      arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()
-    ),
+    .map(|arr| {
+      arr.iter()
+        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+        .collect()
+    })
+    .unwrap_or_else(|| {
+      vec![
+        "Explain the concept clearly.".into(),
+        "Provide a concrete example.".into(),
+      ]
+    });
+
+  let rubric = Rubric {
+    min_sentences: v
+      .get("rubric")
+      .and_then(|r| r.get("min_sentences"))
+      .and_then(|x| x.as_u64())
+      .map(|n| n as u32),
+    require_example: v
+      .get("rubric")
+      .and_then(|r| r.get("require_example"))
+      .and_then(|x| x.as_bool()),
+    key_points: v
+      .get("rubric")
+      .and_then(|r| r.get("key_points"))
+      .and_then(|x| x.as_array())
+      .map(|arr| {
+        arr.iter()
+          .filter_map(|x| x.as_str().map(|s| s.to_string()))
+          .collect()
+      }),
   };
 
   Ok(SpecRes { requirements, rubric })
@@ -163,37 +199,34 @@ struct ChallengeRes {
 
 #[tauri::command]
 async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<ChallengeRes, String> {
-  // read API key from backend storage
   let key = read_api_key(&app).ok_or("OpenAI API key not set in Settings")?;
 
-  // Request body for Chat Completions
   let rubric = payload.rubric.unwrap_or(Rubric {
-  min_sentences: Some(3),
-  require_example: Some(true),
-  key_points: None,
-});
+    min_sentences: Some(3),
+    require_example: Some(true),
+    key_points: None,
+  });
 
-let sys = r#"You are a strict evaluator. Return ONLY JSON like:
+  let sys = r#"You are a strict evaluator. Return ONLY JSON like:
 { "passed": boolean, "feedback": "short explanation" }"#;
 
-let mut rubric_lines = vec![
-  format!("Minimum sentences: {}", rubric.min_sentences.unwrap_or(3)),
-  format!("Require example: {}", rubric.require_example.unwrap_or(true)),
-];
-if let Some(keys) = &rubric.key_points {
-  if !keys.is_empty() {
-    rubric_lines.push(format!("Key points to hit: {}", keys.join(", ")));
+  let mut rubric_lines = vec![
+    format!("Minimum sentences: {}", rubric.min_sentences.unwrap_or(3)),
+    format!("Require example: {}", rubric.require_example.unwrap_or(true)),
+  ];
+  if let Some(keys) = &rubric.key_points {
+    if !keys.is_empty() {
+      rubric_lines.push(format!("Key points to hit: {}", keys.join(", ")));
+    }
   }
-}
 
-let user = format!(
-  "Evaluate the answer for node '{}' ({}).\nRubric:\n{}\n\nAnswer:\n{}",
-  payload.node_id,
-  payload.title,
-  rubric_lines.join("\n"),
-  payload.answer
-);
-
+  let user = format!(
+    "Evaluate the answer for node '{}' ({}).\nRubric:\n{}\n\nAnswer:\n{}",
+    payload.node_id,
+    payload.title,
+    rubric_lines.join("\n"),
+    payload.answer
+  );
 
   let body = serde_json::json!({
     "model": payload.model.unwrap_or_else(|| "gpt-4o-mini".to_string()),
@@ -205,30 +238,33 @@ let user = format!(
     "response_format": { "type": "json_object" }
   });
 
-  // HTTP call
   let client = reqwest::Client::new();
   let resp = client
     .post("https://api.openai.com/v1/chat/completions")
-    .bearer_auth(key)
+    .bearer_auth(read_api_key(&app).ok_or("OpenAI API key not set in Settings")?)
     .json(&body)
     .send()
     .await
     .map_err(|e| e.to_string())?;
 
   if !resp.status().is_success() {
-    // IMPORTANT: capture status BEFORE consuming resp with .text()
     let status = resp.status();
     let t = resp.text().await.unwrap_or_default();
     return Err(format!("OpenAI error: {} {}", status, t));
   }
 
-  // Parse the JSON response
   #[derive(Deserialize)]
-  struct ChatChoiceMsg { content: Option<String> }
+  struct ChatChoiceMsg {
+    content: Option<String>
+  }
   #[derive(Deserialize)]
-  struct ChatChoice { message: ChatChoiceMsg }
+  struct ChatChoice {
+    message: ChatChoiceMsg
+  }
   #[derive(Deserialize)]
-  struct ChatResp { choices: Vec<ChatChoice> }
+  struct ChatResp {
+    choices: Vec<ChatChoice>
+  }
 
   let data: ChatResp = resp.json().await.map_err(|e| e.to_string())?;
   let content = data
@@ -251,14 +287,11 @@ let user = format!(
 
 // ---- Single, correct main() ----
 fn main() {
-  tauri::Builder::default() // NOTE: double-colon ::
+  tauri::Builder::default()
     .plugin(
-      tauri_plugin_log::Builder::default()
+      LogBuilder::default()
         .level(log::LevelFilter::Debug)
-        .targets([
-          tauri_plugin_log::Target::LogDir,
-          tauri_plugin_log::Target::Stdout,
-        ])
+        .targets([LogTarget::LogDir, LogTarget::Stdout])
         .build()
     )
     .invoke_handler(tauri::generate_handler![
@@ -266,7 +299,7 @@ fn main() {
       ping,
       generate_challenge_spec,
       submit_challenge
-    ]) // ← closes ])
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
