@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 use tauri::AppHandle; // no need for Builder/Manager here
-use tauri_plugin_log::{Builder as LogBuilder, LogTarget};
+use tauri::Manager;
+use tauri_plugin_log::{Builder as LogBuilder, Target};
 
 // ---- Helpers to store/read the API key in the app's config dir ----
 fn key_path(app: &AppHandle) -> PathBuf {
@@ -241,7 +242,7 @@ async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<Chall
   let client = reqwest::Client::new();
   let resp = client
     .post("https://api.openai.com/v1/chat/completions")
-    .bearer_auth(read_api_key(&app).ok_or("OpenAI API key not set in Settings")?)
+    .bearer_auth(key)
     .json(&body)
     .send()
     .await
@@ -291,7 +292,7 @@ fn main() {
     .plugin(
       LogBuilder::default()
         .level(log::LevelFilter::Debug)
-        .targets([LogTarget::LogDir, LogTarget::Stdout])
+        .targets([Target::LogDir, Target::Stdout])
         .build()
     )
     .invoke_handler(tauri::generate_handler![
