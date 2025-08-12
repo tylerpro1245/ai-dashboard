@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager};           // Manager is needed for app.path().app_config_dir()
-use tauri_plugin_log::Builder as LogBuilder;
 
 // ---------- file storage for API key ----------
 fn key_path(app: &AppHandle) -> PathBuf {
@@ -203,7 +202,11 @@ async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<Chall
 // ---------- app entry ----------
 fn main() {
   tauri::Builder::default()
-    .plugin(LogBuilder::default().build()) // simple defaults: writes to log dir
+    .plugin(
+      tauri_plugin_log::Builder::default()   // <- simpler: no Target/TargetKind
+        .level(log::LevelFilter::Debug)
+        .build()
+    )
     .invoke_handler(tauri::generate_handler![
       save_api_key,
       ping,
@@ -213,3 +216,4 @@ fn main() {
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
+

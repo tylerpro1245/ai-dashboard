@@ -2,26 +2,29 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ai-dashboard",
   "version": "0.1.0",
-  "identifier": "com.tylerpro1245.ai-dashboard",        
+  "identifier": "com.tylerpro1245.ai-dashboard",
   "build": {
-    "frontendDist": "../dist",                      
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:5174",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "vite --port 5174",
+    "beforeBuildCommand": "vite build"
   },
   "app": {
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]    
+    },
     "windows": [
       {
-        "label": "main",                            
+        "label": "main",
         "title": "ai-dashboard",
         "width": 1000,
         "height": 700,
         "resizable": true,
         "fullscreen": false,
-        "devtools": true                            
+        "devtools": true
       }
-    ],
-    "security": { "csp": null }
+    ]
   },
   "bundle": {
     "active": true,
