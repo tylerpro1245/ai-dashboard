@@ -251,15 +251,8 @@ let user = format!(
 
 // ---- Single, correct main() ----
 fn main() {
-  tauri:Builder::default()
-      .invoke_handler(tauri::generate_handler![
-      ping,
-      generate_challenge,
-      mark_node_in_progress,
-      save_api_key,
-      submit_challenge,
-      generate_challenge_spec   // <-- add this
-      .plugin(
+  tauri::Builder::default() // NOTE: double-colon ::
+    .plugin(
       tauri_plugin_log::Builder::default()
         .level(log::LevelFilter::Debug)
         .targets([
@@ -268,7 +261,12 @@ fn main() {
         ])
         .build()
     )
-
+    .invoke_handler(tauri::generate_handler![
+      save_api_key,
+      ping,
+      generate_challenge_spec,
+      submit_challenge
+    ]) // ← closes ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
