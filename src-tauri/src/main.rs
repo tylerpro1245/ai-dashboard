@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 use tauri::AppHandle; // no need for Builder/Manager here
 use tauri::Manager;
-use tauri_plugin_log::{Builder as LogBuilder, Target};
+use tauri_plugin_log::{Builder as LogBuilder, Target, TargetKind};
 
 // ---- Helpers to store/read the API key in the app's config dir ----
 fn key_path(app: &AppHandle) -> PathBuf {
@@ -292,7 +292,10 @@ fn main() {
     .plugin(
       LogBuilder::default()
         .level(log::LevelFilter::Debug)
-        .targets([Target::LogDir, Target::Stdout])
+        .targets([
+          Target::new(TargetKind::LogDir { file_name: None }),
+          Target::new(TargetKind::Stdout),
+        ])
         .build()
     )
     .invoke_handler(tauri::generate_handler![
