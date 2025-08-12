@@ -1,9 +1,15 @@
 @echo off
-echo Starting AI Dashboard Dev Mode...
-REM Open a new terminal for Vite
-start cmd /k "npm run dev"
-REM Wait 3 seconds for Vite to start
-timeout /t 3 >nul
-REM Start Tauri in this terminal
-npx tauri dev
-pause
+setlocal enableextensions
+
+echo === AI Dashboard Dev ===
+
+REM 1) Kill anything listening on 5174 (Vite default) so Tauri can start cleanly.
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 5174 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction Stop } catch {} }"
+
+REM Small pause so the port is fully released
+ping 127.0.0.1 -n 2 >nul
+
+REM 2) Start Tauri dev (this will run `npm run dev` for you via beforeDevCommand)
+npm run tauri:dev
+
+endlocal
