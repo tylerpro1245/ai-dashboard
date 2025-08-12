@@ -2,10 +2,10 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ai-dashboard",
   "version": "0.1.0",
-  "identifier": "com.yourname.ai_dashboard",        
+  "identifier": "com.tylerpro1245.ai-dashboard",        
   "build": {
     "frontendDist": "../dist",                      
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:5174",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },

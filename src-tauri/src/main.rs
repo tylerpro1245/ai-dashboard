@@ -2,9 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager};           // Manager is needed for app.path().app_config_dir()
 use tauri_plugin_log::Builder as LogBuilder;
-use tauri::menu::{Menu, MenuItem, Submenu};
 
 // ---------- file storage for API key ----------
 fn key_path(app: &AppHandle) -> PathBuf {
@@ -187,7 +186,11 @@ async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<Chall
   #[derive(Deserialize)] struct ChatResp { choices: Vec<ChatChoice> }
 
   let data: ChatResp = resp.json().await.map_err(|e| e.to_string())?;
-  let content = data.choices.get(0).and_then(|c| c.message.content.as_ref()).cloned()
+  let content = data
+    .choices
+    .get(0)
+    .and_then(|c| c.message.content.as_ref())
+    .cloned()
     .ok_or_else(|| "No content".to_string())?;
 
   let parsed: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
@@ -199,31 +202,8 @@ async fn submit_challenge(app: AppHandle, payload: ChallengeReq) -> Result<Chall
 
 // ---------- app entry ----------
 fn main() {
-  // Menu with a DevTools toggle
-  let dev_menu = Submenu::new(
-    "Debug",
-    Menu::with_items([
-      &MenuItem::with_id("toggle-devtools", "Toggle DevTools", true, None::<&str>).unwrap(),
-    ])
-  );
-
   tauri::Builder::default()
-    .plugin(LogBuilder::default().build()) // simple defaults; writes to log dir
-    .menu(Menu::with_items([&dev_menu]))
-    .on_menu_event(|app, event| {
-      if event.id() == "toggle-devtools" {
-        if let Some(win) = app.get_webview_window("main") {
-          win.toggle_devtools();
-        }
-      }
-    })
-    .setup(|app| {
-      // Auto-open DevTools at startup so we can see errors in the packaged app
-      if let Some(win) = app.get_webview_window("main") {
-        win.open_devtools();
-      }
-      Ok(())
-    })
+    .plugin(LogBuilder::default().build()) // simple defaults: writes to log dir
     .invoke_handler(tauri::generate_handler![
       save_api_key,
       ping,
