@@ -426,7 +426,7 @@ signOut: async () => {
       // Global tasks & streak
       tasks: [],
       addTask:(title, relatedNodeId)=>{
-        const newTask = { id:Date.now(), title, relatedNodeId:relatedNodeId||null, done:false, created:new Date().toISOString() }
+        const newTask = { id:Date.now(), title, relatedNodeId:relatedNodeId||null, done:false, created:new Date().toISOString(), completedAt:null, xpAwarded:false }
         set(s=>({ tasks:[newTask, ...s.tasks] }))
       },
       toggleTask:(id)=> set(s=>({ tasks: s.tasks.map(t=>t.id===id?{...t,done:!t.done}:t) })),
@@ -477,7 +477,8 @@ signOut: async () => {
         set(s=>({ achievements:[...(s.achievements||[]), { id,title,detail,earnedAt:new Date().toISOString() }] }))
       },
 
-      settings:{ assistantModel:'gpt-4o-mini' },
+      settings:{ assistantModel:'gpt-4o-mini', appearance:{ theme:'system', density:'comfortable', accent:'blue' } },
+    updateSettings:(patch)=> set(s=>({ settings:{ ...s.settings, ...patch } })),
       updateSettings:(patch)=> set(s=>({ settings:{ ...s.settings, ...patch } })),
 
       // Optional: last sync metadata for UI
@@ -497,7 +498,7 @@ signOut: async () => {
           theme: persisted?.theme ?? 'dark',
           roadmap,
           nodeDetails: persisted?.nodeDetails ?? {},
-          tasks: persisted?.tasks ?? [],
+          tasks: (persisted?.tasks || []).map(t => ({ completedAt: null, xpAwarded: false, ...t })),
           streak: persisted?.streak ?? 0,
           lastCompleted: persisted?.lastCompleted ?? null,
           xp: persisted?.xp ?? 0,

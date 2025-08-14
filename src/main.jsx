@@ -1,6 +1,7 @@
 import './boot-error-overlay.js'   // optional but useful
 import './index.css'
-import React from 'react'
+import React, { useEffect } from 'react'
+import useAppStore from './state/useAppStore.js'
 import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './App.jsx'
@@ -19,10 +20,31 @@ window.addEventListener('unhandledrejection', (e) => {
   console.error('UnhandledRejection:', e?.reason);
 });
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
+function Boot() {
+  useEffect(() => {
+    const unsub = useAppStore.subscribe(
+      (s) => s.settings?.appearance,
+      (ap) => {
+        const root = document.documentElement
+        const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches
+        const theme = ap?.theme || 'system'
+        const isLight = theme === 'system' ? !prefersDark : theme === 'light'
+        root.classList.toggle('light', isLight)
+        root.dataset.density = ap?.density || 'comfortable'
+        root.dataset.accent = ap?.accent || 'blue'
+      },
+      { fireImmediately: true }
+    )
+    return () => unsub()
+  }, [])
+
+  return (
     <HashRouter>
       <App />
     </HashRouter>
-  </React.StrictMode>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode><Boot /></React.StrictMode>
 )

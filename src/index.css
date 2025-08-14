@@ -9,6 +9,16 @@
   --accent: #2563eb;
 }
 
+html.light {
+  --bg: #f8fafc;
+  --text: #0f172a;
+  --muted: #475569;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+}
+
+
 .app.light {
   --bg: #f8fafc;
   --text: #0f172a;
@@ -118,4 +128,14 @@ a:hover { text-decoration: underline; }
 .pill {
   display:inline-block; padding:4px 8px; border-radius:999px;
   background:#0b1220; color:#e5e7eb; font-size:12px; border:1px solid var(--border);
+}
+
+
+/* Opaque selects so status menus aren’t white */
+select, .select, option {
+  background-color: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
 }

@@ -11,6 +11,7 @@ const RANK_TITLES = [
 export default function Dashboard() {
   const roadmap = useAppStore(s => s.roadmap)
   const xp = useAppStore(s => s.xp)
+  const tasks = useAppStore(s => s.tasks)
 
   const info = useMemo(() => {
     const { currentLevel, cur, next } = nextLevelXp(xp)
@@ -19,6 +20,12 @@ export default function Dashboard() {
     const pct = Math.min(1, Math.max(0, (xp - cur) / denom))
     return { xp, level: currentLevel, title, cur, next, pct }
   }, [xp])
+
+  const todayDone = useMemo(() => {
+    const today = new Date().toDateString()
+    return tasks.filter(t => t.completedAt && new Date(t.completedAt).toDateString() === today)
+  }, [tasks])
+
 
   const done = roadmap.filter(n => n.status === 'done').length
 
