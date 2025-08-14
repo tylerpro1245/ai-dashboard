@@ -231,6 +231,8 @@ resetEverywhere: async () => {
             roadmap
           }
         })
+      get().markDirty('toggleNodeTask');
+    
       },
 
       // Mark challenge pass/fail; if pass + tasks done -> auto complete
@@ -259,6 +261,8 @@ resetEverywhere: async () => {
 
           return { nodeDetails: { ...nd, [nodeId]: { ...d, challenge } }, roadmap }
         })
+      get().markDirty('setChallengePassed');
+    
       },
 
       // Guarded status setter with "done" lock and XP-once
@@ -296,6 +300,8 @@ resetEverywhere: async () => {
             return { ...n, status }
           })
         }))
+      get().markDirty('setNodeStatus');
+    
       },
 
       // ----- EXPORT / IMPORT (for manual backup & for sync) -----
@@ -423,11 +429,68 @@ signOut: async () => {
         return { imported: ok, version: data.version, updated_at: data.updated_at }
       },
 
-      // Global tasks & streak
+      
+
+// ---- Dirty tracking + on-demand sync ----
+dirty: false,
+lastLocalChangeAt: null,
+markDirty: (why='change') => {
+  set({ dirty: true, lastLocalChangeAt: new Date().toISOString() })
+  const st = get()
+  // Debounced immediate sync (only when autoSync enabled)
+  if (typeof window !== 'undefined' && st.autoSync) {
+    if (window.__aiDashChangeTimer) clearTimeout(window.__aiDashChangeTimer)
+    window.__aiDashChangeTimer = setTimeout(async () => {
+      const gs = get()
+      if (gs.autoSync) { try { await gs.syncNow() } catch (e) {} }
+    }, 800)
+  }
+},
+// Push first to avoid losing local edits, then pull
+syncNow: async () => {
+  const user = await get().getUser()
+  if (!user || !supabase || !supaEnabled) return { skipped: 'no-user' }
+  try {
+    if (get().dirty) { await get().syncPush(); set({ dirty: false }) }
+  } catch (e) { /* keep dirty, will retry later */ }
+  try {
+    return await get().syncPull()
+  } catch (e) { return { error: String(e) } }
+},
+// ---- Auto Sync Loop (10s pull, push on close) ----
+startSyncLoop: () => {
+  if (typeof window === 'undefined') return
+  if (window.__aiDashSyncTimer) return // already running
+  const tick = async () => {
+    try {
+      const user = await get().getUser()
+      if (!user) return
+      await get().syncPull()
+    } catch (e) { /* swallow */ }
+  }
+  // polling disabled; syncing on changes only
+  // Push latest on app close/minimize
+  const onClose = async () => { try { await get().syncPush() } catch (e) {} }
+  window.__aiDashPushOnClose = onClose
+  window.addEventListener('beforeunload', onClose)
+  window.addEventListener('blur', onClose)
+},
+stopSyncLoop: () => {
+  if (typeof window === 'undefined') return
+  if (window.__aiDashSyncTimer) { clearInterval(window.__aiDashSyncTimer); delete window.__aiDashSyncTimer }
+  if (window.__aiDashPushOnClose) {
+    window.removeEventListener('beforeunload', window.__aiDashPushOnClose)
+    window.removeEventListener('blur', window.__aiDashPushOnClose)
+    delete window.__aiDashPushOnClose
+  }
+},
+// Global tasks & streak
       tasks: [],
       addTask:(title, relatedNodeId)=>{
-        const newTask = { id:Date.now(), title, relatedNodeId:relatedNodeId||null, done:false, created:new Date().toISOString(), completedAt:null, xpAwarded:false }
+        const newTask = { id:Date.now(), title, relatedNodeId:relatedNodeId||null, done:false, created:new Date().toISOString() }
         set(s=>({ tasks:[newTask, ...s.tasks] }))
+      get().markDirty('addTask');
+    
       },
       toggleTask:(id)=> set(s=>({ tasks: s.tasks.map(t=>t.id===id?{...t,done:!t.done}:t) })),
       clearDone:()=> set(s=>({ tasks: s.tasks.filter(t=>!t.done) })),
@@ -445,6 +508,8 @@ signOut: async () => {
         get().addXp(50+bonus)
         get().maybeUnlock('streak-3','On a Roll','3-day completion streak.', ()=>get().streak>=3)
         get().maybeUnlock('streak-7','Habit Formed','7-day completion streak.', ()=>get().streak>=7)
+      get().markDirty('completeTask');
+    
       },
 
       // XP / LEVEL / RANK / ACHIEVEMENTS
@@ -477,8 +542,7 @@ signOut: async () => {
         set(s=>({ achievements:[...(s.achievements||[]), { id,title,detail,earnedAt:new Date().toISOString() }] }))
       },
 
-      settings:{ assistantModel:'gpt-4o-mini', appearance:{ theme:'system', density:'comfortable', accent:'blue' } },
-    updateSettings:(patch)=> set(s=>({ settings:{ ...s.settings, ...patch } })),
+      settings:{ assistantModel:'gpt-4o-mini' },
       updateSettings:(patch)=> set(s=>({ settings:{ ...s.settings, ...patch } })),
 
       // Optional: last sync metadata for UI
@@ -498,7 +562,7 @@ signOut: async () => {
           theme: persisted?.theme ?? 'dark',
           roadmap,
           nodeDetails: persisted?.nodeDetails ?? {},
-          tasks: (persisted?.tasks || []).map(t => ({ completedAt: null, xpAwarded: false, ...t })),
+          tasks: persisted?.tasks ?? [],
           streak: persisted?.streak ?? 0,
           lastCompleted: persisted?.lastCompleted ?? null,
           xp: persisted?.xp ?? 0,
